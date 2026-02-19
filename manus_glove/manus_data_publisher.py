@@ -9,6 +9,7 @@ Usage:
 
 import copy
 import logging
+import os
 import threading
 import time
 
@@ -26,6 +27,7 @@ from ._enums import (
     HandMotion,
     JointTypeToString,
     SDKReturnCode,
+    SetGloveCalibrationReturnCode,
     Side,
     SideToString,
 )
@@ -64,6 +66,8 @@ class ManusDataPublisher:
         ip: str = "",
         world_space: bool = True,
         hand_motion: HandMotion = HandMotion.NoMotion,
+        left_calibration_path: str | None = None,
+        right_calibration_path: str | None = None,
         debug: bool = False,
     ):
         if ManusDataPublisher._s_Instance is not None:
@@ -87,6 +91,12 @@ class ManusDataPublisher:
         self.m_Ip = ip
         self.m_WorldSpace = world_space
         self.m_HandMotion = hand_motion
+
+        # Calibration file paths and load-state flags (mirrors C++ m_LeftCalibrationLoaded etc.)
+        self.m_LeftCalibrationPath = left_calibration_path
+        self.m_RightCalibrationPath = right_calibration_path
+        self.m_LeftCalibrationLoaded = False
+        self.m_RightCalibrationLoaded = False
 
         # Coordinate system (mirrors C++ defaults: XFromViewer, PositiveZ, Right, 1.0)
         self.m_CoordinateSystem = {
@@ -623,6 +633,69 @@ class ManusDataPublisher:
         rc = self._lib.CoreSdk_VibrateFingersForGlove(glove_id, c_powers)
         if rc != SDKReturnCode.Success:
             logger.error("Failed to vibrate glove %d: SDK error %d", glove_id, rc)
+
+    # ------------------------------------------------------------------
+    # Calibration (mirrors C++ ManusDataPublisher::LoadCalibrationFile)
+    # ------------------------------------------------------------------
+
+    def LoadCalibrationFile(self, glove_id: int, side: int, calibration_path: str) -> bool:
+        """Load a .mcal calibration file and send it to the SDK for a given glove.
+
+        Mirrors C++ ManusDataPublisher::LoadCalibrationFile.
+        Returns True on success, False if the file is missing or the SDK call fails.
+        """
+        if not os.path.isfile(calibration_path):
+            logger.warning("Calibration file not found: %s", calibration_path)
+            return False
+
+        with open(calibration_path, "rb") as f:
+            data = f.read()
+
+        length = len(data)
+        c_data = self._ffi.new("unsigned char[]", data)
+        p_result = self._ffi.new("int *")
+
+        rc = self._lib.CoreSdk_SetGloveCalibration(glove_id, c_data, length, p_result)
+        if rc != SDKReturnCode.Success:
+            logger.error("CoreSdk_SetGloveCalibration SDK error for glove %d: %d", glove_id, rc)
+            return False
+
+        cal_rc = p_result[0]
+        if cal_rc == SetGloveCalibrationReturnCode.Success:
+            side_str = SideToString(side)
+            logger.info("Calibration loaded successfully for %s glove (ID: %d)", side_str, glove_id)
+            return True
+        else:
+            logger.error("Failed to load calibration for glove ID %d, error code: %d", glove_id, cal_rc)
+            return False
+
+    def LoadCalibrationFiles(self) -> None:
+        """Load calibration files for all currently known gloves using the paths
+        supplied at construction time (left_calibration_path / right_calibration_path).
+
+        Mirrors the auto-load logic in C++ ManusDataPublisher::PublishCallback.
+        Call this after Connect() once the landscape is available.
+        """
+        landscape = self.GetLandscape()
+        if landscape is None:
+            logger.warning("LoadCalibrationFiles: landscape not yet available.")
+            return
+
+        for glove in landscape.get("gloves", []):
+            glove_id = glove["id"]
+            side = glove["side"]
+
+            if side == Side.Left and not self.m_LeftCalibrationLoaded:
+                if self.m_LeftCalibrationPath is None:
+                    logger.warning("No left calibration path configured.")
+                elif self.LoadCalibrationFile(glove_id, side, self.m_LeftCalibrationPath):
+                    self.m_LeftCalibrationLoaded = True
+
+            elif side == Side.Right and not self.m_RightCalibrationLoaded:
+                if self.m_RightCalibrationPath is None:
+                    logger.warning("No right calibration path configured.")
+                elif self.LoadCalibrationFile(glove_id, side, self.m_RightCalibrationPath):
+                    self.m_RightCalibrationLoaded = True
 
     # ------------------------------------------------------------------
     # String helpers (mirrors C++ helper methods, delegated to _enums.py)

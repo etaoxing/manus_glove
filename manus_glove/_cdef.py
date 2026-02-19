@@ -421,6 +421,9 @@ CDEF = """
     /* Gesture landscape */
     int CoreSdk_GetGestureLandscapeData(GestureLandscapeData *landscapeDataArray, uint32_t arraySize);
 
+    /* Calibration */
+    int CoreSdk_SetGloveCalibration(uint32_t gloveId, unsigned char *calibrationBytes, uint32_t bytesLength, int *result);
+
     /* Host init */
     void ManusHost_Init(ManusHost *host);
 """

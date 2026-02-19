@@ -9,6 +9,7 @@ from ._enums import (
     FingerJointType,
     HandMotion,
     SDKReturnCode,
+    SetGloveCalibrationReturnCode,
     Side,
 )
 from .manus_data_publisher import ManusDataPublisher, ManusSDKError
@@ -24,5 +25,6 @@ __all__ = [
     "ManusDataPublisher",
     "ManusSDKError",
     "SDKReturnCode",
+    "SetGloveCalibrationReturnCode",
     "Side",
 ]
