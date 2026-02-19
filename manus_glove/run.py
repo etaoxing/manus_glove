@@ -202,6 +202,7 @@ def main():
                             glove_viz_map[glove_id] = viz.GloveViz(glove_id)
                         else:
                             raise ValueError(args.viz_style)
+                        pub.LoadCalibrationFiles()
 
                     if args.viz_style == "enhanced":
                         update_glove_viz_enhanced(glove_viz_map[glove_id], data)

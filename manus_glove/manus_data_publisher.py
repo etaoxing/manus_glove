@@ -68,7 +68,7 @@ class ManusDataPublisher:
         hand_motion: HandMotion = HandMotion.NoMotion,
         calibration_dir: str | None = None,
         left_calibration_file: str | None = "LeftMetaglovePro.mcal",
-        right_calibration_file: str | None = "RightMetaGlovePro.mcal",
+        right_calibration_file: str | None = "RightMetaglovePro.mcal",
         debug: bool = False,
     ):
         if ManusDataPublisher._s_Instance is not None:
