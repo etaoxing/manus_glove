@@ -9,7 +9,6 @@ Usage:
 
 import copy
 import logging
-import os
 import threading
 import time
 
@@ -17,21 +16,20 @@ import cffi
 
 from ._cdef import CDEF
 from ._enums import (
-    SDKReturnCode,
-    ConnectionType,
-    Side,
-    ChainType,
-    FingerJointType,
-    HandMotion,
-    AxisView,
     AxisPolarity,
-    ErgonomicsDataType,
-    SideToString,
-    JointTypeToString,
+    AxisView,
     ChainTypeToString,
+    ConnectionType,
+    ErgonomicsDataType,
     ErgonomicsDataTypeToSide,
     ErgonomicsDataTypeToString,
+    HandMotion,
+    JointTypeToString,
+    SDKReturnCode,
+    Side,
+    SideToString,
 )
+from .sdk import resolve_lib_path
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +79,7 @@ class ManusDataPublisher:
         self._ffi.cdef(CDEF)
 
         if lib_path is None:
-            lib_path = self._resolve_lib_path()
+            lib_path = resolve_lib_path()
         self._lib = self._ffi.dlopen(lib_path)
 
         # Connection settings (mirrors C++ member variables)
@@ -120,68 +118,6 @@ class ManusDataPublisher:
         self._callbacks = {}
 
     # ------------------------------------------------------------------
-    # Library resolution
-    # ------------------------------------------------------------------
-
-    _SDK_ZIP_URL = (
-        "https://static.manus-meta.com/resources/manus_core_3/"
-        "version_locked_installer/MANUS_Core_3.1.1_Version_Locked_Installer.zip"
-    )
-    _SDK_ZIP_MEMBER = (
-        "ManusSDK_v3.1.1/SDKMinimalClient_Linux/ManusSDK/lib/"
-        "libManusSDK_Integrated.so"
-    )
-
-    @staticmethod
-    def _resolve_lib_path() -> str:
-        """Resolve the .so path: repo-local → cache → auto-download."""
-        repo_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "ManusSDK", "lib", "libManusSDK_Integrated.so",
-        )
-        if os.path.isfile(repo_path):
-            return repo_path
-
-        cache_path = os.path.join(
-            os.path.expanduser("~"), ".cache", "manus_glove", "lib",
-            "libManusSDK_Integrated.so",
-        )
-        if os.path.isfile(cache_path):
-            return cache_path
-
-        logger.info("ManusSDK .so not found locally; downloading from Manus installer…")
-        ManusDataPublisher._download_sdk(cache_path)
-        return cache_path
-
-    @staticmethod
-    def _download_sdk(dest: str) -> None:
-        """Download the Manus installer zip and extract the .so to *dest*."""
-        import tempfile
-        import urllib.request
-        import zipfile
-
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            tmp_path = tmp.name
-        try:
-            logger.info("Downloading %s …", ManusDataPublisher._SDK_ZIP_URL)
-            urllib.request.urlretrieve(ManusDataPublisher._SDK_ZIP_URL, tmp_path)
-            with zipfile.ZipFile(tmp_path) as zf:
-                with zf.open(ManusDataPublisher._SDK_ZIP_MEMBER) as src, open(dest, "wb") as dst:
-                    import shutil
-                    shutil.copyfileobj(src, dst)
-            logger.info("Saved ManusSDK .so to %s", dest)
-        except Exception:
-            # Clean up partial file on failure
-            if os.path.exists(dest):
-                os.remove(dest)
-            raise
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-
-    # ------------------------------------------------------------------
     # Lifecycle (mirrors C++ constructor flow)
     # ------------------------------------------------------------------
 
@@ -214,9 +150,7 @@ class ManusDataPublisher:
         coord.handedness = self.m_CoordinateSystem["handedness"]
         coord.unitScale = self.m_CoordinateSystem["unitScale"]
 
-        rc = self._lib.CoreSdk_InitializeCoordinateSystemWithVUH(
-            coord[0], self.m_WorldSpace
-        )
+        rc = self._lib.CoreSdk_InitializeCoordinateSystemWithVUH(coord[0], self.m_WorldSpace)
         if rc != SDKReturnCode.Success:
             raise ManusSDKError("CoreSdk_InitializeCoordinateSystemWithVUH", rc)
 
@@ -225,15 +159,14 @@ class ManusDataPublisher:
 
         Mirrors C++ ManusDataPublisher::RegisterAllCallbacks.
         """
+
         # Raw skeleton stream
         @self._ffi.callback("void(const SkeletonStreamInfo *)")
         def _OnRawSkeletonStreamCallback(p_RawSkeletonStreamInfo):
             self._OnRawSkeletonStreamCallback(p_RawSkeletonStreamInfo)
 
         self._callbacks["raw_skeleton"] = _OnRawSkeletonStreamCallback
-        rc = self._lib.CoreSdk_RegisterCallbackForRawSkeletonStream(
-            _OnRawSkeletonStreamCallback
-        )
+        rc = self._lib.CoreSdk_RegisterCallbackForRawSkeletonStream(_OnRawSkeletonStreamCallback)
         if rc != SDKReturnCode.Success:
             raise ManusSDKError("CoreSdk_RegisterCallbackForRawSkeletonStream", rc)
 
@@ -243,9 +176,7 @@ class ManusDataPublisher:
             self._OnRawDeviceDataStreamCallback(p_RawDeviceDataInfo)
 
         self._callbacks["raw_device"] = _OnRawDeviceDataStreamCallback
-        rc = self._lib.CoreSdk_RegisterCallbackForRawDeviceDataStream(
-            _OnRawDeviceDataStreamCallback
-        )
+        rc = self._lib.CoreSdk_RegisterCallbackForRawDeviceDataStream(_OnRawDeviceDataStreamCallback)
         if rc != SDKReturnCode.Success:
             raise ManusSDKError("CoreSdk_RegisterCallbackForRawDeviceDataStream", rc)
 
@@ -255,9 +186,7 @@ class ManusDataPublisher:
             self._OnErgonomicsStreamCallback(p_ErgonomicsStream)
 
         self._callbacks["ergonomics"] = _OnErgonomicsStreamCallback
-        rc = self._lib.CoreSdk_RegisterCallbackForErgonomicsStream(
-            _OnErgonomicsStreamCallback
-        )
+        rc = self._lib.CoreSdk_RegisterCallbackForErgonomicsStream(_OnErgonomicsStreamCallback)
         if rc != SDKReturnCode.Success:
             raise ManusSDKError("CoreSdk_RegisterCallbackForErgonomicsStream", rc)
 
@@ -345,9 +274,7 @@ class ManusDataPublisher:
         if landscape is not None:
             for glove in landscape.get("gloves", []):
                 if glove.get("isHaptics", False):
-                    logger.info(
-                        "Sending zero vibration to glove %d", glove["id"]
-                    )
+                    logger.info("Sending zero vibration to glove %d", glove["id"])
                     powers = self._ffi.new("float[5]", [0, 0, 0, 0, 0])
                     self._lib.CoreSdk_VibrateFingersForGlove(glove["id"], powers)
 
@@ -536,9 +463,7 @@ class ManusDataPublisher:
 
         nodes_count = skel["nodesCount"]
         node_info_arr = self._ffi.new("NodeInfo[]", nodes_count)
-        rc = self._lib.CoreSdk_GetRawSkeletonNodeInfoArray(
-            glove_id, node_info_arr, nodes_count
-        )
+        rc = self._lib.CoreSdk_GetRawSkeletonNodeInfoArray(glove_id, node_info_arr, nodes_count)
         if rc != SDKReturnCode.Success:
             logger.error("CoreSdk_GetRawSkeletonNodeInfoArray error: %d", rc)
             return None
@@ -668,9 +593,7 @@ class ManusDataPublisher:
     # Haptics (mirrors C++ vibration support)
     # ------------------------------------------------------------------
 
-    def VibrateFingersForGlove(
-        self, glove_id: int, powers: list[float]
-    ) -> None:
+    def VibrateFingersForGlove(self, glove_id: int, powers: list[float]) -> None:
         """Send vibration command to a haptic glove.
 
         Mirrors C++ ManusDataPublisher::OnVibrationCommand.

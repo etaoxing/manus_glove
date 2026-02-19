@@ -1,10 +1,9 @@
-import os
 import logging
+import os
+import shutil
 import tempfile
 import urllib.request
 import zipfile
-import shutil
-
 
 logger = logging.getLogger(__name__)
 

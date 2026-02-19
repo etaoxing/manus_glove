@@ -3,7 +3,7 @@
 Mirrors the visualization from manus_ros2/client_scripts/manus_data_viz.py
 but uses the CFFI-based ManusDataPublisher directly (no ROS2).
 
-Data is polled at 200 Hz in a background thread. Rendering runs on the main
+Data is polled at DATA_RATE_HZ in a background thread. Rendering runs on the main
 thread at whatever rate Open3D can sustain.
 
 Usage:
@@ -103,7 +103,7 @@ def data_poll_loop(
     data_lock: threading.Lock,
     stop_event: threading.Event,
 ):
-    """Poll glove data at 200 Hz in background thread."""
+    """Poll glove data at DATA_RATE_HZ in background thread."""
     interval = 1.0 / DATA_RATE_HZ
     last_log_time = time.monotonic()
     poll_counts: dict[int, int] = {}
@@ -128,7 +128,9 @@ def data_poll_loop(
             for gid, count in poll_counts.items():
                 logger.info(
                     "Glove ID: %d, polls in the last 10 seconds: %d (%.1f Hz)",
-                    gid, count, count / 10.0,
+                    gid,
+                    count,
+                    count / 10.0,
                 )
             poll_counts.clear()
             last_log_time = now
@@ -155,7 +157,7 @@ def main():
 
         logger.info("Landscape received. Starting data + render loops.")
 
-        # Start 200 Hz data polling thread
+        # Start data polling thread
         data_thread = threading.Thread(
             target=data_poll_loop,
             args=(pub, latest_data, data_lock, stop_event),
@@ -173,7 +175,8 @@ def main():
                     if glove_id not in glove_viz_map:
                         logger.info(
                             "New glove detected: id=%d side=%s",
-                            glove_id, data["side"],
+                            glove_id,
+                            data["side"],
                         )
                         glove_viz_map[glove_id] = GloveViz(glove_id)
 
