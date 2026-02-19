@@ -4,7 +4,7 @@ Python-only CFFI wrapper for ManusSDK.
 
 # Usage
 ```bash
-pip install manus_glove
+pip install "manus_glove @ git+https://github.com/etaoxing/manus_glove.git"
 
 # udev
 sudo tee /etc/udev/rules.d/70-manus-hid.rules << 'EOF'
@@ -18,11 +18,11 @@ EOF
 # reload udev
 sudo udevadm control --reload-rules && sudo udevadm trigger
 
-# libManusSDK_Integrated.so will be automatically downloaded to ~/.cache/manus_glove/lib
-# put calibration files in ~/.cache/manus_glove/
+# libManusSDK_Integrated.so will be automatically downloaded on first use to ~/.cache/manus_glove/lib
+# (optional) put calibration files in ~/.cache/manus_glove/
 
 # run glove visualization
-python -m manus_glove.run
+python -m manus_glove.run --debug
 ```
 
 References:
