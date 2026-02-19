@@ -24,9 +24,6 @@ from . import common_viz
 
 logger = logging.getLogger(__name__)
 
-DATA_RATE_HZ = 120
-RENDER_RATE_HZ = 60
-
 OMITTED_NODES: set[int] = set()  # e.g. {5, 10, 15, 20} to match viz_21 behaviour
 
 
