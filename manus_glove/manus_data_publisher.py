@@ -75,6 +75,10 @@ class ManusDataPublisher:
             raise RuntimeError("ManusDataPublisher can only be initialized once.")
         ManusDataPublisher._s_Instance = self
 
+        _UDEV_RULES = "/etc/udev/rules.d/70-manus-hid.rules"
+        if not os.path.isfile(_UDEV_RULES):
+            raise RuntimeError(f"udev rules not found: {_UDEV_RULES}")
+
         # Debug logging
         self.debug = debug
         logger.setLevel(logging.DEBUG if debug else logging.WARNING)
