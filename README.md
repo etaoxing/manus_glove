@@ -18,6 +18,9 @@ EOF
 # reload udev
 sudo udevadm control --reload-rules && sudo udevadm trigger
 
+# libManusSDK_Integrated.so will be automatically downloaded to ~/.cache/manus_glove/lib
+# put calibration files in ~/.cache/manus_glove/
+
 # run glove visualization
 python -m manus_glove.run
 ```

@@ -66,8 +66,9 @@ class ManusDataPublisher:
         ip: str = "",
         world_space: bool = True,
         hand_motion: HandMotion = HandMotion.NoMotion,
-        left_calibration_path: str | None = None,
-        right_calibration_path: str | None = None,
+        calibration_dir: str | None = None,
+        left_calibration_file: str | None = "LeftMetaglovePro.mcal",
+        right_calibration_file: str | None = "RightMetaGlovePro.mcal",
         debug: bool = False,
     ):
         if ManusDataPublisher._s_Instance is not None:
@@ -93,8 +94,19 @@ class ManusDataPublisher:
         self.m_HandMotion = hand_motion
 
         # Calibration file paths and load-state flags (mirrors C++ m_LeftCalibrationLoaded etc.)
-        self.m_LeftCalibrationPath = left_calibration_path
-        self.m_RightCalibrationPath = right_calibration_path
+        if calibration_dir is not None:
+            _cal_dir = calibration_dir
+        else:
+            _cal_dir = os.path.join(os.path.expanduser("~"), ".cache", "manus_glove")
+
+        def _cal_path(filename: str | None) -> str | None:
+            if not filename:
+                return None
+            p = os.path.join(_cal_dir, filename)
+            return p if os.path.isfile(p) else None
+
+        self.m_LeftCalibrationPath = _cal_path(left_calibration_file)
+        self.m_RightCalibrationPath = _cal_path(right_calibration_file)
         self.m_LeftCalibrationLoaded = False
         self.m_RightCalibrationLoaded = False
 
