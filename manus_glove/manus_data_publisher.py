@@ -143,6 +143,17 @@ class ManusDataPublisher:
         if self.m_ConnectionType in (ConnectionType.Invalid,):
             raise ManusSDKError("InitializeSDK", SDKReturnCode.InvalidArgument)
 
+        # Register log callback before Initialize so startup messages are captured.
+        # When debug=False the callback is a no-op, suppressing all SDK output.
+        @self._ffi.callback("void(int, const char *, uint32_t)")
+        def _OnLogCallback(level, message, length):
+            if self.debug:
+                msg = self._ffi.string(message, length).decode("utf-8", errors="replace")
+                logger.debug("[SDK] %s", msg.rstrip())
+
+        self._callbacks["log"] = _OnLogCallback
+        self._lib.CoreSdk_RegisterCallbackForOnLog(_OnLogCallback)
+
         if self.m_ConnectionType == ConnectionType.Integrated:
             rc = self._lib.CoreSdk_InitializeIntegrated()
         else:

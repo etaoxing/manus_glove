@@ -22,7 +22,6 @@ from manus_glove import ManusDataPublisher
 
 from . import common_viz
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATA_RATE_HZ = 120
@@ -199,9 +198,16 @@ def main():
         "--viz-style",
         choices=["simple", "enhanced"],
         default="enhanced",
-        help="Visualization style (default: simple)",
+        help="Visualization style (default: enhanced)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable DEBUG log messages",
     )
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
 
     glove_viz_map: dict[int, GloveViz] = {}
 
@@ -210,7 +216,7 @@ def main():
     data_lock = threading.Lock()
     stop_event = threading.Event()
 
-    with ManusDataPublisher() as pub:
+    with ManusDataPublisher(debug=args.debug) as pub:
         logger.info("Connected. Waiting for glove data...")
 
         while pub.GetLandscape() is None:
