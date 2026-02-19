@@ -8,10 +8,7 @@ import zipfile
 logger = logging.getLogger(__name__)
 
 
-_SDK_ZIP_URL = (
-    "https://static.manus-meta.com/resources/manus_core_3/"
-    "version_locked_installer/MANUS_Core_3.1.1_Version_Locked_Installer.zip"
-)
+_SDK_ZIP_URL = "https://static.manus-meta.com/resources/manus_core_3/sdk/MANUS_Core_3.1.1_SDK.zip"
 _SDK_ZIP_MEMBER = "ManusSDK_v3.1.1/SDKMinimalClient_Linux/ManusSDK/lib/libManusSDK_Integrated.so"
 
 
@@ -36,7 +33,7 @@ def resolve_lib_path() -> str:
     if os.path.isfile(cache_path):
         return cache_path
 
-    logger.info("ManusSDK .so not found locally; downloading from Manus installer…")
+    logger.info("ManusSDK .so not found locally; downloading from Manus installer...")
     download_sdk(cache_path)
     return cache_path
 
@@ -49,7 +46,7 @@ def download_sdk(dest: str) -> None:
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
         tmp_path = tmp.name
     try:
-        logger.info("Downloading %s …", _SDK_ZIP_URL)
+        logger.info("Downloading %s ...", _SDK_ZIP_URL)
         urllib.request.urlretrieve(_SDK_ZIP_URL, tmp_path)
         with zipfile.ZipFile(tmp_path) as zf:
             with zf.open(_SDK_ZIP_MEMBER) as src, open(dest, "wb") as dst:
