@@ -195,7 +195,7 @@ def main():
         "--viz-style",
         choices=["simple", "enhanced"],
         default="enhanced",
-        help="Visualization style (default: enhanced)",
+        help="Visualization style (default: simple)",
     )
     parser.add_argument(
         "--debug",
