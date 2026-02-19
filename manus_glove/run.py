@@ -20,32 +20,14 @@ import open3d as o3d
 
 from manus_glove import ManusDataPublisher
 
-from . import common_viz
+from . import common_viz, viz
 
 logger = logging.getLogger(__name__)
 
 OMITTED_NODES: set[int] = set()  # e.g. {5, 10, 15, 20} to match viz_21 behaviour
 
 
-class GloveViz:
-    """Open3D visualization for a single glove."""
-
-    def __init__(self, glove_id: int):
-        self.glove_id = glove_id
-        self.viz = o3d.visualization.Visualizer()
-        self.viz.create_window(window_name=f"Manus Glove {glove_id}", width=800, height=600)
-
-        self.node_meshes: dict[int, o3d.geometry.TriangleMesh] = {}
-        self.node_positions: dict[int, np.ndarray] = {}
-
-        self.frame_mesh = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-        self.line_set = o3d.geometry.LineSet()
-
-        self.viz.add_geometry(self.frame_mesh)
-        self.viz.add_geometry(self.line_set)
-
-
-def update_glove_viz(glove_viz: GloveViz, glove_data: dict) -> None:
+def update_glove_viz(glove_viz: viz.GloveViz, glove_data: dict) -> None:
     """Update visualization with new glove data."""
     glove_viz.node_positions = {}
 
@@ -67,7 +49,7 @@ def update_glove_viz(glove_viz: GloveViz, glove_data: dict) -> None:
         mesh.translate(position, relative=False)
         glove_viz.viz.update_geometry(mesh)
 
-    update_lines(glove_viz, glove_data)
+    glove_viz.update_lines(glove_data)
 
 
 def update_glove_viz_enhanced(glove_viz: common_viz.GloveViz, glove_data: dict) -> None:
@@ -100,34 +82,6 @@ def update_glove_viz_enhanced(glove_viz: common_viz.GloveViz, glove_data: dict) 
 
     glove_viz.update_skeleton(connections)
     glove_viz.update_axes()
-
-
-def update_lines(glove_viz: GloveViz, glove_data: dict) -> None:
-    """Update lines connecting child and parent nodes."""
-    line_points = []
-    line_indices = []
-
-    for node in glove_data["raw_nodes"]:
-        node_id = node["id"]
-        parent_id = node.get("parentId")
-
-        if parent_id is None:
-            continue
-
-        if parent_id in glove_viz.node_positions and node_id in glove_viz.node_positions:
-            child_pos = glove_viz.node_positions[node_id]
-            parent_pos = glove_viz.node_positions[parent_id]
-
-            start_idx = len(line_points)
-            line_points.append(parent_pos)
-            line_points.append(child_pos)
-            line_indices.append([start_idx, start_idx + 1])
-
-    if line_points:
-        glove_viz.line_set.points = o3d.utility.Vector3dVector(line_points)
-        glove_viz.line_set.lines = o3d.utility.Vector2iVector(line_indices)
-        glove_viz.line_set.paint_uniform_color([0, 0, 0])
-        glove_viz.viz.update_geometry(glove_viz.line_set)
 
 
 def data_poll_loop(
@@ -194,7 +148,7 @@ def main():
     parser.add_argument(
         "--viz-style",
         choices=["simple", "enhanced"],
-        default="enhanced",
+        default="simple",
         help="Visualization style (default: simple)",
     )
     parser.add_argument(
@@ -206,7 +160,7 @@ def main():
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
 
-    glove_viz_map: dict[int, GloveViz] = {}
+    glove_viz_map = {}
 
     # Shared between data thread and render loop
     latest_data: dict[int, dict] = {}
@@ -244,13 +198,17 @@ def main():
                         )
                         if args.viz_style == "enhanced":
                             glove_viz_map[glove_id] = common_viz.GloveViz(glove_id, data["side"])
+                        elif args.viz_style == "simple":
+                            glove_viz_map[glove_id] = viz.GloveViz(glove_id)
                         else:
-                            glove_viz_map[glove_id] = GloveViz(glove_id)
+                            raise ValueError(args.viz_style)
 
                     if args.viz_style == "enhanced":
                         update_glove_viz_enhanced(glove_viz_map[glove_id], data)
-                    else:
+                    elif args.viz_style == "simple":
                         update_glove_viz(glove_viz_map[glove_id], data)
+                    else:
+                        raise ValueError(args.viz_style)
 
                 for gv in glove_viz_map.values():
                     gv.viz.poll_events()
