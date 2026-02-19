@@ -7,9 +7,10 @@ Data is polled at DATA_RATE_HZ in a background thread. Rendering runs on the mai
 thread at whatever rate Open3D can sustain.
 
 Usage:
-    python -m manus_glove.run
+    python -m manus_glove.run [--data-rate-hz N] [--render-rate-hz N] [--viz-style {simple,enhanced}]
 """
 
+import argparse
 import logging
 import threading
 import time
@@ -19,11 +20,15 @@ import open3d as o3d
 
 from manus_glove import ManusDataPublisher
 
+from . import common_viz
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATA_RATE_HZ = 120
 RENDER_RATE_HZ = 60
+
+OMITTED_NODES: set[int] = set()  # e.g. {5, 10, 15, 20} to match viz_21 behaviour
 
 
 class GloveViz:
@@ -69,6 +74,38 @@ def update_glove_viz(glove_viz: GloveViz, glove_data: dict) -> None:
     update_lines(glove_viz, glove_data)
 
 
+def update_glove_viz_enhanced(glove_viz: common_viz.GloveViz, glove_data: dict) -> None:
+    """Update enhanced visualization with colored spheres, axes, and labels."""
+    nodes = glove_data["raw_nodes"]
+    kept = [n for n in nodes if n["id"] not in OMITTED_NODES]
+    kept_ids = {n["id"] for n in kept}
+
+    # Determine leaf nodes: IDs that are not anyone's parent
+    parent_ids = {n["parentId"] for n in kept if n.get("parentId") is not None}
+    leaf_ids = kept_ids - parent_ids
+
+    # Build parent lookup for skipping omitted nodes
+    parent_map = {n["id"]: n.get("parentId") for n in nodes}
+
+    for idx, node in enumerate(sorted(kept, key=lambda n: n["id"])):
+        node_id = node["id"]
+        pos = np.array(node["position"])
+        rot = np.array(node["rotation"])  # (x, y, z, w)
+        glove_viz.update_node(node_id, pos, rot, is_leaf=(node_id in leaf_ids), node_index=idx)
+
+    # Build skeleton connections (walk up parent chain to skip omitted nodes)
+    connections = []
+    for node_id in kept_ids:
+        pid = parent_map.get(node_id)
+        while pid is not None and pid in OMITTED_NODES:
+            pid = parent_map.get(pid)
+        if pid is not None and pid in kept_ids:
+            connections.append((pid, node_id))
+
+    glove_viz.update_skeleton(connections)
+    glove_viz.update_axes()
+
+
 def update_lines(glove_viz: GloveViz, glove_data: dict) -> None:
     """Update lines connecting child and parent nodes."""
     line_points = []
@@ -102,9 +139,10 @@ def data_poll_loop(
     latest_data: dict[int, dict],
     data_lock: threading.Lock,
     stop_event: threading.Event,
+    data_rate_hz: float = 120.0,
 ):
-    """Poll glove data at DATA_RATE_HZ in background thread."""
-    interval = 1.0 / DATA_RATE_HZ
+    """Poll glove data at data_rate_hz in background thread."""
+    interval = 1.0 / data_rate_hz
     last_log_time = time.monotonic()
     poll_counts: dict[int, int] = {}
 
@@ -142,6 +180,29 @@ def data_poll_loop(
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Manus glove visualization")
+    parser.add_argument(
+        "--data-rate-hz",
+        type=float,
+        default=120.0,
+        metavar="N",
+        help="Data polling rate in Hz (default: 120.0)",
+    )
+    parser.add_argument(
+        "--render-rate-hz",
+        type=float,
+        default=60.0,
+        metavar="N",
+        help="Render rate in Hz (default: 60.0)",
+    )
+    parser.add_argument(
+        "--viz-style",
+        choices=["simple", "enhanced"],
+        default="enhanced",
+        help="Visualization style (default: simple)",
+    )
+    args = parser.parse_args()
+
     glove_viz_map: dict[int, GloveViz] = {}
 
     # Shared between data thread and render loop
@@ -160,7 +221,7 @@ def main():
         # Start data polling thread
         data_thread = threading.Thread(
             target=data_poll_loop,
-            args=(pub, latest_data, data_lock, stop_event),
+            args=(pub, latest_data, data_lock, stop_event, args.data_rate_hz),
             daemon=True,
         )
         data_thread.start()
@@ -178,15 +239,21 @@ def main():
                             glove_id,
                             data["side"],
                         )
-                        glove_viz_map[glove_id] = GloveViz(glove_id)
+                        if args.viz_style == "enhanced":
+                            glove_viz_map[glove_id] = common_viz.GloveViz(glove_id, data["side"])
+                        else:
+                            glove_viz_map[glove_id] = GloveViz(glove_id)
 
-                    update_glove_viz(glove_viz_map[glove_id], data)
+                    if args.viz_style == "enhanced":
+                        update_glove_viz_enhanced(glove_viz_map[glove_id], data)
+                    else:
+                        update_glove_viz(glove_viz_map[glove_id], data)
 
                 for gv in glove_viz_map.values():
                     gv.viz.poll_events()
                     gv.viz.update_renderer()
 
-                time.sleep(1 / RENDER_RATE_HZ)
+                time.sleep(1 / args.render_rate_hz)
         finally:
             stop_event.set()
             data_thread.join(timeout=1.0)
