@@ -2,7 +2,7 @@
 
 Python-only CFFI wrapper for ManusSDK.
 
-# Setup
+# Usage
 ```bash
 pip install manus_glove
 
@@ -17,6 +17,9 @@ EOF
 
 # reload udev
 sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# run glove visualization
+python -m manus_glove.run
 ```
 
 References:
