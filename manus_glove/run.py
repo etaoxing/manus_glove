@@ -18,7 +18,7 @@ import time
 import numpy as np
 import open3d as o3d
 
-from manus_glove import ManusDataPublisher
+from manus_glove import HandMotion, ManusDataPublisher
 
 from . import common_viz, viz
 
@@ -152,6 +152,12 @@ def main():
         help="Visualization style (default: simple)",
     )
     parser.add_argument(
+        "--hand-motion",
+        choices=["NoMotion", "IMU"],
+        default="NoMotion",
+        help="Wrist tracking mode (default: NoMotion)",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable DEBUG log messages",
@@ -167,7 +173,7 @@ def main():
     data_lock = threading.Lock()
     stop_event = threading.Event()
 
-    with ManusDataPublisher(debug=args.debug) as pub:
+    with ManusDataPublisher(hand_motion=HandMotion[args.hand_motion], debug=args.debug) as pub:
         logger.info("Connected. Waiting for glove data...")
 
         while pub.GetLandscape() is None:
